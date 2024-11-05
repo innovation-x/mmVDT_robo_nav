@@ -22,7 +22,7 @@ if __name__ == "__main__":
     epoch = 100
     in_channels = 6
     input_size = 8
-    checkpoint_path = os.path.join('/home/xu/xu/robo_nav/checkpoints_mmVDT_cat_vae_seg')
+    checkpoint_path = os.path.join('/checkpoints_mmVDT_cat_vae_seg')
 
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(DEVICE)
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     vae.encoder.conv_in = nn.Conv2d(9, vae.encoder.conv_in.out_channels, kernel_size=3, stride=1, padding=1)
     vae.decoder.conv_out = nn.Conv2d(vae.decoder.conv_out.in_channels, 9, kernel_size=3, stride=1, padding=1)
 
-    modelData = '/home/xu/xu/robo_nav/checkpoints_vae_seg/vae_40.pth.tar'
+    modelData = 'checkpoints_vae_seg/vae_40.pth.tar'
     checkpoint = torch.load(modelData)
     vae.load_state_dict(checkpoint['model_state_dict'])
     vae.to(DEVICE)
