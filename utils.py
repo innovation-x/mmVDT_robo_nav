@@ -23,30 +23,41 @@ class MixedSequenceMaskGenerator():
         self.y1 = y1
         self.y2 = y2
     
-    def temporal_mask_generator(self, batch, motion,idx=0):
+    def temporal_mask_generator(self, batch, motion,idx=0,t=half_seq_len):
         mask_vid = torch.zeros_like(batch)
         mask_mot = torch.zeros_like(motion)
         # Predict
         if idx == 0:
-            mask_vid[:, self.t1:self.t2] = 1
-            mask_mot[:, self.t1:self.t2] = 1
+            mask_vid[:, t:self.t2] = 1
+            mask_mot[:, t:self.t2] = 1
+
         # Backward
         elif idx == 1:
             mask_vid[:, 0:self.t1] = 1
             mask_mot[:, 0:self.t1] = 1
-        # Interpreation
-        elif idx == 2:
-            mask_vid[:, self.t1:self.t2 -2] = 1
-            mask_mot[:, self.t1:self.t2 -2] = 1
+            
+        # # Interpolation
+        # elif idx == 2:
+        #     mask_vid[:, self.t1:self.t2 -2] = 1
+        #     mask_mot[:, self.t1:self.t2 -2] = 1
+
+        # Only one frame
+        # elif idx == 3:
+        #     frame_idx = random.randint(0,self.t2 -1)
+        #     mask_vid[:, 0:frame_idx] = 1
+        #     mask_vid[:, frame_idx+1:] = 1
+
+        #     mask_mot[:, 0:frame_idx] = 1
+        #     mask_mot[:, frame_idx+1:] = 1
 
         return mask_vid, mask_mot
 
-    def __call__(self, batch, motion, idx=None):
+    def __call__(self, batch, motion, idx=None, t=half_seq_len):
         if idx is not None:
-            mask_vid, mask_mot = self.temporal_mask_generator(batch, motion,idx)
+            mask_vid, mask_mot = self.temporal_mask_generator(batch, motion,idx, t)
         else:
-            idx = random.randint(0,2)
-            mask_vid, mask_mot = self.temporal_mask_generator(batch, motion,idx)
+            idx = random.randint(0,1)
+            mask_vid, mask_mot = self.temporal_mask_generator(batch, motion,idx, t)
         return mask_vid, mask_mot
 
 def mask_vid_mot(mask_vid, mask_mot, vid, mot, diff_vid, diff_mot): 
@@ -69,7 +80,8 @@ def extend_batch(batch, dataloader, batch_size):
     """
     while batch.shape[0] != batch_size:
         dataloader_iterator = iter(dataloader)
-        nw_batch,_ = dict.values(next(dataloader_iterator))
+        nw_batch,_,_ = next(dataloader_iterator)
+        nw_batch,_ = dict.values(nw_batch)
         nw_batch = nw_batch.to(DEVICE)
         if nw_batch.shape[0] + batch.shape[0] > batch_size:
             nw_batch = nw_batch[:batch_size - batch.shape[0]]
@@ -85,7 +97,8 @@ def extend_motion(motion, dataloader, batch_size):
     """
     while motion.shape[0] != batch_size:
         dataloader_iterator = iter(dataloader)
-        _, nw_motion = dict.values(next(dataloader_iterator))
+        nw_batch,_,_ = next(dataloader_iterator)
+        _, nw_motion = dict.values(nw_batch)
         nw_motion = nw_motion.to(DEVICE)
 
         if nw_motion.shape[0] + motion.shape[0] > batch_size:
@@ -110,6 +123,48 @@ def fw_diffusion_mot(x, alpha_cum, t):
     return diff_x, eps
 
 
+def visual_img(batch, motion, mot_viz = True):
+    '''
+    This function can visualize the video clips and present the 
+    motions on the frames. 
+    The shape of video clips: (1,16,64,64,9)
+    The shape of motion: (1,16,2)
+    '''
+
+    linear_gt = []
+    angle_gt = []
+
+    fig = plt.figure(figsize=(15, 10))
+    batch_rgb = torch.argmax(batch, 4)
+    squence_length = batch_rgb.shape[1]
+    C, T, H, W = batch_rgb.shape
+    batch_rgb = batch_rgb.squeeze().cpu().detach().numpy()
+    motion = motion.squeeze().cpu().detach().numpy()
+    # The ground-truth unobserved actions (gt robot actions)
+    for t in range(squence_length):
+        if (t >= half_seq_len):            
+            x = float(motion[t,0].mean())
+            z = float(motion[t,1].mean())
+            linear_gt.append(x)
+            angle_gt.append(z)
+    #         print('li:%.3f'%x,'ang:%.3f'%z)
+    # print('==========================================================')
+
+    # Visualization of full information video inputs and gt robot actions
+    for t in range(squence_length):
+        im = torch.tensor(batch_rgb[t:t+1,:,:])
+        im = im.view(H, W, C)
+        ax = fig.add_subplot(6, int(squence_length/2), int(squence_length/2)+t+1, xticks=[], yticks=[])
+        if t==int(squence_length/2):
+            map_x = 60 - 10*torch.cumsum(torch.tensor(linear_gt[::int(squence_length/16)]), dim=0)*np.cos(np.pi/4)
+            map_z = 32 - torch.cumsum(torch.cumsum(torch.tensor(angle_gt[::int(squence_length/16)]), dim=0),dim=0)*np.cos(np.pi/4)
+        ax.imshow(im[:,:],'gray')  
+    if mot_viz:
+        fig1 = plt.figure(figsize=(20, 5))
+        plt.plot(map_z.tolist(), map_x.tolist(), color='b', marker='o', linestyle='-',linewidth=2,markersize=5)
+        im = torch.tensor(batch_rgb[half_seq_len-1,:,:]).view(H,W,C)
+        plt.imshow(im, 'gray') 
+
 def visual_img_each_channel(batch, channel = 1, mot_viz = True):
     '''
     This function can visualize the video clips and present the 
@@ -132,17 +187,12 @@ def visual_img_each_channel(batch, channel = 1, mot_viz = True):
 
         ax.imshow(im,'gray')
 
-def visual_vid_mmot(batch, motion, rgb=False, mot_viz = True, is_road=False):
+def visual_vid_mmot(batch, motion, rgb=False, mot_viz = True, is_road=False, grid=True):
     '''
     This function can visualize the video clips and present the 
     motions on the frames. 
-
-    one-hot encoded image:
-        The shape of video clips: (16,64,64,9)
-    RGB image:
-        The shape of video clips: (16,64,64,3)
-    
-    motion: a list for multiple motion outputs whose shape is (16,2)
+    The shape of video clips: (1,16,64,64,9)
+    The shape of motion: (1,16,2)
     '''
 
     fig = plt.figure(figsize=(15, 10))
@@ -161,6 +211,15 @@ def visual_vid_mmot(batch, motion, rgb=False, mot_viz = True, is_road=False):
         im = im.view(H, W, C)
         ax = fig.add_subplot(6, int(squence_length/2), int(squence_length/2)+t+1, xticks=[], yticks=[])
         ax.imshow(im[:,:],'gray')  
+        if grid:
+            # 设置网格
+            ax.set_xticks(range(0, W, 10))  # 设置 x 轴的网格间隔
+            ax.set_yticks(range(0, H, 10))  # 设置 y 轴的网格间隔
+            ax.grid(True, color='blue', linestyle='--', linewidth=0.3)  # 设置网格样式
+
+            # 隐藏坐标轴
+            ax.set_xticklabels([])  # 隐藏 x 轴标签
+            ax.set_yticklabels([])  # 隐藏 y 轴标签
 
     # The ground-truth unobserved actions (gt robot actions)
     fig1 = plt.figure(figsize=(20, 5))
@@ -195,8 +254,7 @@ def visual_vid_mmot(batch, motion, rgb=False, mot_viz = True, is_road=False):
 
 
 def gray2color(video):
-    
-    '''The input video size: [16, 9, 64, 64]'''
+    ''' The input video size: [16, 9, 64, 64] '''
     video = torch.argmax(video, 1).unsqueeze(1).cpu().numpy() *0.1*255
     video = np.round(video*10)/10
     # print(video[14,0,30])
@@ -237,51 +295,8 @@ def gray2color(video):
     video_rgb = torch.cat([torch.tensor(video_r),torch.tensor(video_g), torch.tensor(video_b)], dim=1)/255
     return video_rgb
 
-def save_video(frames, motion, output_path, fps=10):
-    # 获取帧的宽度和高度（假设所有帧大小一致）
-    height, width, _ = frames[0].shape
-    
-    # 定义视频编码器, 选择一个合适的编码器，例如 MJPG 或 MP4
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-
-    # 创建 VideoWriter 对象
-    out = cv2.VideoWriter(output_path, fourcc, fps, (256, 256))
-    start_x, start_y = width // 2, height - 5  # 从视频中心开始
-
-    # 将每一帧写入视频
-    for i in range(8):
-        frame = frames[i]
-        speed = motion[i, 0]  # 前后的移动速度
-        angle = motion[i, 1]  # 转角（弧度）
-        # 计算箭头的结束位置
-        if abs(speed) < 0.01:
-            end_x = int(start_x)
-            end_y = int(start_y)  
-
-        else:
-            # print(np.sin(angle))
-            end_x = int(start_x - 30 * np.sin(angle))
-            end_y = int(start_y - 25 * np.cos(angle))  
-
-        # 绘制箭头
-        arrow_color = (0, 1, 0)  # 绿色箭头
-        cv2.arrowedLine(frame, (start_x, start_y), (end_x, end_y), arrow_color, thickness=2, tipLength=0.5)
-
-        # 更新起始位置为当前结束位置
-        # start_x, start_y = end_x, end_y
-
-        if frame.dtype == np.float64:
-            frame = (frame * 255).astype(np.uint8)
-        # 如果帧是 RGB 格式，需要转换为 BGR 格式
-        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        frame_bgr = cv2.resize(frame_bgr,(256,256))
-        # 写入视频文件
-        out.write(frame_bgr)
-    
-    # 释放 VideoWriter 对象
-    out.release()
-    print(f"视频已保存为 {output_path}")
 if __name__ == '__main__':
     a = torch.randn([1, 16, 64, 64, 9])
     b = torch.randn([1,16,2]) 
+    visual_img(a,b)
 

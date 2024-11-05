@@ -149,7 +149,8 @@ if __name__ == "__main__":
             enc_vid = vae.encode(vid).latent_dist.sample()
             enc_vid = enc_vid.reshape(args.batch_size, args.sequence_length,4,8,8).permute(0,1,3,4,2)
             # Mask the inputs
-            mask_vid, mask_motion = mask_generator(enc_vid, mot)
+            frame_t = random.randint(4,12)
+            mask_vid, mask_motion = mask_generator(enc_vid, mot, t=frame_t)
 
             # Noised input data, Video noise eps_vid and Motion noise eps_mot
             t = torch.randint(0, args.iteration_num, (args.batch_size, 1)).squeeze()
