@@ -187,7 +187,7 @@ def visual_img_each_channel(batch, channel = 1, mot_viz = True):
 
         ax.imshow(im,'gray')
 
-def visual_vid_mmot(batch, motion, rgb=False, mot_viz = True, is_road=False, grid=True):
+def visual_vid_mmot(batch, motion, rgb=False, mot_viz = True, is_road=False, grid=True, frame_t = half_seq_len):
     '''
     This function can visualize the video clips and present the 
     motions on the frames. 
@@ -209,7 +209,11 @@ def visual_vid_mmot(batch, motion, rgb=False, mot_viz = True, is_road=False, gri
     for t in range(squence_length):
         im = torch.tensor(batch_rgb[t:t+1,:,:])
         im = im.view(H, W, C)
-        ax = fig.add_subplot(6, int(squence_length/2), int(squence_length/2)+t+1, xticks=[], yticks=[])
+        if squence_length == 16:
+            ax = fig.add_subplot(6, int(squence_length/2), int(squence_length/2)+t+1, xticks=[], yticks=[])
+        else:
+            ax = fig.add_subplot(6, int(squence_length/4), int(squence_length/2)+t+1, xticks=[], yticks=[])
+
         ax.imshow(im[:,:],'gray')  
         if grid:
             # 设置网格
@@ -230,7 +234,7 @@ def visual_vid_mmot(batch, motion, rgb=False, mot_viz = True, is_road=False, gri
         linear_gt = []
         angle_gt = []
         for t in range(squence_length):
-            if (t >= half_seq_len):            
+            if (t >= frame_t):            
                 x = float(motion[t,0].mean())
                 z = float(motion[t,1].mean())
                 linear_gt.append(x)
@@ -246,7 +250,7 @@ def visual_vid_mmot(batch, motion, rgb=False, mot_viz = True, is_road=False, gri
                 plt.plot(map_z.tolist(), map_x.tolist(), color='r', marker='o', linestyle='-',linewidth=1.5,markersize=3.5)
             else: 
                 plt.plot(map_z.tolist(), map_x.tolist(), color='g', marker='o', linestyle='-',linewidth=1,markersize=3)
-            im = torch.tensor(batch_rgb[half_seq_len-1,:,:]).view(H,W,C)
+            im = torch.tensor(batch_rgb[frame_t-1,:,:]).view(H,W,C)
             plt.imshow(im, 'gray') 
         if is_road:
             return(map_z[-1], map_x[-1])
