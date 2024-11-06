@@ -46,7 +46,7 @@ def train(rank):
     # The parser setting
     parser = argparse.ArgumentParser()
     parser = VideoDataset.add_model_specific_args(parser)
-    parser.add_argument('--data_path', type=str, default='dataset/111')
+    parser.add_argument('--data_path', type=str, default='dataset/2024-10-31_xacti_5fps')
 
     parser.add_argument('--sequence_length', type=int, default=40)
     parser.add_argument('--resolution', type=int, default=64)
@@ -124,21 +124,21 @@ def train(rank):
     for param in vae.parameters():
         param.requires_grad = False
     
+    if rank == 0:
+        # start a new wandb run to track this script
+        wandb.init(
+            # set the wandb project where this run will be logged
+            project="seg_vae_VDT",
 
-    # start a new wandb run to track this script
-    # wandb.init(
-    #     # set the wandb project where this run will be logged
-    #     project="seg_vae_VDT",
-
-    #     # track hyperparameters and run metadata
-    #     config={
-    #     "learning_rate": args.LR_RATE,
-    #     "epochs": args.NUM_EPOCHS,
-    #     }
-    # )
-    # wandb.define_metric("Epoch")
-    # wandb.define_metric("mean_video_loss", step_metric="Epoch")
-    # wandb.define_metric("mean_motion_loss", step_metric="Epoch")
+            # track hyperparameters and run metadata
+            config={
+            "learning_rate": args.LR_RATE,
+            "epochs": args.NUM_EPOCHS,
+            }
+        )
+        wandb.define_metric("Epoch")
+        wandb.define_metric("mean_video_loss", step_metric="Epoch")
+        wandb.define_metric("mean_motion_loss", step_metric="Epoch")
 
     #################################### Train loop #########################################
     from utils import mask_vid_mot
@@ -169,7 +169,7 @@ def train(rank):
             enc_vid = vae.encode(vid).latent_dist.sample()
             enc_vid = enc_vid.reshape(-1, args.sequence_length,4,8,8).permute(0,1,3,4,2)
             # Mask the inputs
-            frame_t = random.randint(5,20)
+            frame_t = random.randint(5,15)
             mask_vid, mask_motion = mask_generator(enc_vid, mot, t=frame_t)
 
             # Noised input data, Video noise eps_vid and Motion noise eps_mot
@@ -198,13 +198,14 @@ def train(rank):
             loss = loss_vid + loss_mot
             mean_loss_vid += loss_vid.item()
             mean_loss_mot += loss_mot.item()
-            # log metrics to wandb
-            # log_dict = {
-            #     "Epoch":epoch,
-            #     "mean_video_loss": mean_loss_vid/(loop.n+1), 
-            #     "mean_motion_loss": mean_loss_mot/(loop.n+1),
-            # }
-            # wandb.log(log_dict)
+            if rank == 0:
+                # log metrics to wandb
+                log_dict = {
+                    "Epoch":epoch,
+                    "mean_video_loss": mean_loss_vid/(loop.n+1), 
+                    "mean_motion_loss": mean_loss_mot/(loop.n+1),
+                }
+                wandb.log(log_dict)
 
             loss.backward()
             optimizer.step()
@@ -212,7 +213,7 @@ def train(rank):
             loop.set_postfix(loss=loss.item(), noise_est_loss_vid=mean_loss_vid/(loop.n+1),noise_est_loss_mot=mean_loss_mot/(loop.n+1))
 
         if ((epoch+1) % 10 == 0):
-            torch.save({'model_state_dict': eps_est_model.state_dict()}, checkpoint_path + '/VDT_20241105_mgpu_d'+ str(depth) +'_h'+ str(hidden_size) +'_nh'+ str(nhead) +'_np'+ str(patch_size) +'_it1000_'  + str(epoch+1) + '.pth.tar')
+            torch.save({'model_state_dict': eps_est_model.state_dict()}, checkpoint_path + '/VDT_20241031_xacti_5fps_seq40_mgpu_d'+ str(depth) +'_h'+ str(hidden_size) +'_nh'+ str(nhead) +'_np'+ str(patch_size) +'_it1000_'  + str(epoch+1) + '.pth.tar')
 
 if __name__ == "__main__":
     mp.spawn(train, nprocs=world_size, join=True)
