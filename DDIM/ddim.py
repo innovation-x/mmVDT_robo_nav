@@ -16,7 +16,7 @@ def remove_module_prefix(state_dict):
     return new_state_dict
 
 class ddim_generator(nn.Module):
-    def __init__(self,nit=200, nhead=8,patch_size=8, depth=12, hidden_size=768, input_size=64,in_channels=9, model_path=None, _cuda=None, cat=False):
+    def __init__(self,nit=200, nhead=8,patch_size=8, depth=12, hidden_size=768, input_size=64,in_channels=9, sequence_length=16, model_path=None, _cuda=None, cat=False):
         super(ddim_generator, self).__init__()
 
         self._cuda = _cuda
@@ -32,7 +32,7 @@ class ddim_generator(nn.Module):
                 in_channels=in_channels,
                 hidden_size=hidden_size,
                 depth=depth,
-                num_frames=16,
+                num_frames=sequence_length,
                 num_heads=nhead,
                 mlp_ratio=4.0,
                 learn_sigma=False
@@ -45,7 +45,7 @@ class ddim_generator(nn.Module):
                 in_channels=in_channels,
                 hidden_size=hidden_size,
                 depth=depth,
-                num_frames=16,
+                num_frames=sequence_length,
                 num_heads=nhead,
                 mlp_ratio=4.0,
                 learn_sigma=False
