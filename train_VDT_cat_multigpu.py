@@ -25,7 +25,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 os.environ['MASTER_ADDR'] = 'localhost'  # 主节点地址，单机训练可以用localhost
 os.environ['MASTER_PORT'] = '12345'      # 通讯端口，可以是未被占用的任意端口
 world_size = 4
-
+mulgpu = True
 
 def train(rank):
     # initialization 
@@ -53,7 +53,7 @@ def train(rank):
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--LR_RATE', type=int, default=1e-4)
-    parser.add_argument('--NUM_EPOCHS', type=int, default=100)
+    parser.add_argument('--NUM_EPOCHS', type=int, default=200)
     parser.add_argument('--iteration_num', type=int, default=1000)
     args = parser.parse_args(args=[])
 
@@ -115,9 +115,14 @@ def train(rank):
     vae.encoder.conv_in = nn.Conv2d(9, vae.encoder.conv_in.out_channels, kernel_size=3, stride=1, padding=1)
     vae.decoder.conv_out = nn.Conv2d(vae.decoder.conv_out.in_channels, 9, kernel_size=3, stride=1, padding=1)
 
-    modelData = 'checkpoints_vae_seg/vae_40.pth.tar'
+    modelData = 'checkpoints_vae_seg/vae_20241031_60.pth.tar'
     checkpoint = torch.load(modelData)
-    vae.load_state_dict(checkpoint['model_state_dict'])
+    if mulgpu == True:
+        state_dict = checkpoint['model_state_dict']
+        state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
+    else:
+        state_dict = checkpoint['model_state_dict']
+    vae.load_state_dict(state_dict)
     vae.to(rank)
 
     # freeze vae
