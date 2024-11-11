@@ -34,12 +34,20 @@ class VideoDataset(data.Dataset):
         camera_motions = []
         camera_mot = []
         # screen all folders under the directory
-        folder = osp.join(data_folder, 'train' if train else 'test')
-        files = sorted(sum([glob.glob(osp.join(folder, '**', f'*.{ext}'), recursive=True)
-                     for ext in self.exts], []))
-        
-        motion_files = sorted(glob.glob(osp.join(folder, '**', f'*.csv'), recursive=True))
 
+        folder = osp.join(data_folder, 'train' if train else 'test')
+        # files = sorted(sum([glob.glob(osp.join(folder, '**', f'*.{ext}'), recursive=True)
+        #              for ext in self.exts], []))
+         
+        # motion_files = sorted(glob.glob(osp.join(folder, '**', f'*.csv'), recursive=True))
+        
+        files = sorted(sum([glob.glob(osp.join(folder, '**', f'*.{ext}'), recursive=True)
+                     for ext in self.exts], []), key=lambda x: (osp.basename(osp.dirname(x)), int(osp.splitext(osp.basename(x))[0])))
+         
+        motion_files = sorted(glob.glob(osp.join(folder, '**', f'*.csv'), recursive=True), 
+                              key=lambda x:(osp.basename(osp.dirname(x)), int(osp.splitext(osp.basename(x))[0])))
+        # print(files)
+        # print(motion_files)
         for motion in motion_files:
             mot = torch.load(motion)
             if mot.shape[0] != 2:

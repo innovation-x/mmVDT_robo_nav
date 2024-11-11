@@ -115,7 +115,7 @@ def train(rank):
     vae.encoder.conv_in = nn.Conv2d(9, vae.encoder.conv_in.out_channels, kernel_size=3, stride=1, padding=1)
     vae.decoder.conv_out = nn.Conv2d(vae.decoder.conv_out.in_channels, 9, kernel_size=3, stride=1, padding=1)
 
-    modelData = 'checkpoints_vae_seg/vae_20241031_60.pth.tar'
+    modelData = 'checkpoints_vae_seg/vae_20241031_20.pth.tar'
     checkpoint = torch.load(modelData)
     if mulgpu == True:
         state_dict = checkpoint['model_state_dict']

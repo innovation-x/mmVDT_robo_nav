@@ -37,19 +37,19 @@ def train(rank):
     # The parser setting
     parser = argparse.ArgumentParser()
     parser = VideoDataset.add_model_specific_args(parser)
-    parser.add_argument('--data_path', type=str, default='dataset/2024-10-31_xacti_5fps')
-
+    # parser.add_argument('--data_path', type=str, default='dataset/2024-10-31_xacti_5fps')
+    parser.add_argument('--data_path', type=str, default='dataset/2024-10-31_xacti_5fps_origin')
     parser.add_argument('--sequence_length', type=int, default=16)
     parser.add_argument('--resolution', type=int, default=64)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--LR_RATE', type=int, default=1e-4)
-    parser.add_argument('--NUM_EPOCHS', type=int, default=60)
+    parser.add_argument('--NUM_EPOCHS', type=int, default=40)
     args = parser.parse_args(args=[])
-
+    rgb = True
     # Load the Dataset
     Dataset = VideoDataset
-    dataset = Dataset(args.data_path, args.sequence_length,rgb=False, train=True, resolution=args.resolution)
+    dataset = Dataset(args.data_path, args.sequence_length, rgb=rgb, train=True, resolution=args.resolution)
     sampler = torch.utils.data.distributed.DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=True)
 
     # dataloader for the trainning
@@ -72,13 +72,16 @@ def train(rank):
         pin_memory=True,
         shuffle=False
     )
-
-    input_dim = 9
-    output_dim = 9
-    vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-mse")
-    # Modify the encoder and decoder in the VAE
-    vae.encoder.conv_in = nn.Conv2d(input_dim, vae.encoder.conv_in.out_channels, kernel_size=3, stride=1, padding=1)
-    vae.decoder.conv_out = nn.Conv2d(vae.decoder.conv_out.in_channels, output_dim, kernel_size=3, stride=1, padding=1)
+    if rgb:
+        input_dim = 3
+        vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-mse")
+    else:
+        input_dim = 9
+        output_dim = 9
+        vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-mse")
+        # Modify the encoder and decoder in the VAE
+        vae.encoder.conv_in = nn.Conv2d(input_dim, vae.encoder.conv_in.out_channels, kernel_size=3, stride=1, padding=1)
+        vae.decoder.conv_out = nn.Conv2d(vae.decoder.conv_out.in_channels, output_dim, kernel_size=3, stride=1, padding=1)
     vae.to(rank)
     if torch.cuda.device_count() > 1:
         vae = DDP(vae, device_ids=[rank])
@@ -86,6 +89,7 @@ def train(rank):
 
     optimizer = optim.Adam(vae.parameters(), lr=args.LR_RATE)
     loss_CE = nn.CrossEntropyLoss()
+    loss_mse = nn.MSELoss()
     #start Training
     for epoch in range(args.NUM_EPOCHS):
         mean_loss_vid = 0
@@ -103,12 +107,16 @@ def train(rank):
             # vid = extend_batch(vid, dataloader_train, args.batch_size)
 
             # Map input images to latent space + normalize latents:
-            vid = vid.view(-1,64,64,9).permute(0,3,1,2)
+            vid = vid.view(-1,64,64,input_dim).permute(0,3,1,2)
             z = vae.module.encode(vid).latent_dist.sample()
             recon_vid = vae.module.decode(z).sample
-            gt_vid = torch.argmax(vid,dim=1)
-            # print(gt_vid.shape, recon_vid.shape)
-            loss_vid = loss_CE(recon_vid, gt_vid)
+            if rgb:
+                gt_vid = vid
+                loss_vid = loss_mse(recon_vid, gt_vid)
+            else:
+                gt_vid = torch.argmax(vid,dim=1)
+                # print(gt_vid.shape, recon_vid.shape)
+                loss_vid = loss_CE(recon_vid, gt_vid)
 
             mean_loss_vid += loss_vid.item()
 
@@ -118,7 +126,7 @@ def train(rank):
             loop.set_postfix(loss_vid=mean_loss_vid/(loop.n+1))
 
         if ((epoch+1) % 20 == 0):
-            torch.save({'model_state_dict': vae.state_dict()}, checkpoint_path + '/vae_20241031'+ str(epoch+1) + '.pth.tar')
+            torch.save({'model_state_dict': vae.state_dict()}, checkpoint_path + '/vae_20241031_rgb'+ str(epoch+1) + '.pth.tar')
 
 
 if __name__ == "__main__":
