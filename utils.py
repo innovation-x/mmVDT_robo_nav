@@ -266,32 +266,32 @@ def gray2color(video):
     video_g = copy.deepcopy(video)
     video_b = copy.deepcopy(video)
 
-    ################ Wall ######################
+    ################ Wall: Light cream######################
     video_r[video_r== 76.5] = 238 
     video_g[video_g== 76.5] = 213 
     video_b[video_b== 76.5] = 183 
 
-    ################ Person ######################
+    ################ Person: Deep orange-red ######################
     video_r[video_r==153] = 212 
     video_g[video_g==153] = 76 
     video_b[video_b==153] = 60 
 
-    ################ Floor ######################
+    ################ Floor: gray ######################
     video_r[video_r==178.5] = 128
     video_g[video_g==178.5] = 128 
     video_b[video_b==178.5] = 128 
 
-    ################ Window ######################
+    ################ Window: Blue-Green ######################
     video_r[video_r==102] = 68
     video_g[video_g==102] = 117 
     video_b[video_b==102] = 122 
 
-    ################ ceiling ######################
+    ################ ceiling: Off-White ######################
     video_r[video_r==25.5] = 220
     video_g[video_g==25.5] = 220 
     video_b[video_b==25.5] = 220 
 
-    ################ Door ##########################
+    ################ Door: Purple ##########################
     video_r[video_r==127.5] = 69 
     video_g[video_g==127.5] = 42 
     video_b[video_b==127.5] = 61 

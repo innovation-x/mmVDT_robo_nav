@@ -26,6 +26,7 @@ os.environ['MASTER_ADDR'] = 'localhost'  # 主节点地址，单机训练可以�
 os.environ['MASTER_PORT'] = '12345'      # 通讯端口，可以是未被占用的任意端口
 world_size = 4
 mulgpu = True
+rgb = True
 
 def train(rank):
     # initialization 
@@ -46,21 +47,21 @@ def train(rank):
     # The parser setting
     parser = argparse.ArgumentParser()
     parser = VideoDataset.add_model_specific_args(parser)
-    parser.add_argument('--data_path', type=str, default='dataset/2024-10-31_xacti_5fps')
+    parser.add_argument('--data_path', type=str, default='dataset/2024-10-31_xacti_5fps_origin')
 
     parser.add_argument('--sequence_length', type=int, default=40)
     parser.add_argument('--resolution', type=int, default=64)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--num_workers', type=int, default=4)
-    parser.add_argument('--LR_RATE', type=int, default=1e-4)
+    parser.add_argument('--LR_RATE', type=int, default=5e-5) # 1e-4
     parser.add_argument('--NUM_EPOCHS', type=int, default=200)
     parser.add_argument('--iteration_num', type=int, default=1000)
     args = parser.parse_args(args=[])
-
+    
 
     # Load the Dataset
     Dataset = VideoDataset
-    dataset = Dataset(args.data_path, args.sequence_length,rgb=False, train=True, resolution=args.resolution)
+    dataset = Dataset(args.data_path, args.sequence_length,rgb=rgb, train=True, resolution=args.resolution)
     sampler = torch.utils.data.distributed.DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=True)
 
     # dataloader for the trainning
@@ -74,7 +75,7 @@ def train(rank):
     )
 
     # dataloader for the evaluation
-    dataset = Dataset(args.data_path, args.sequence_length, train=False, resolution=args.resolution)
+    dataset = Dataset(args.data_path, args.sequence_length, rgb=rgb, train=False, resolution=args.resolution)
     dataloader_val = DataLoader(
         dataset,
         batch_size=args.batch_size,
@@ -111,17 +112,27 @@ def train(rank):
     eps_est_model.to(rank)
 
     from diffusers.models import AutoencoderKL
-    vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-mse").to(rank)
-    vae.encoder.conv_in = nn.Conv2d(9, vae.encoder.conv_in.out_channels, kernel_size=3, stride=1, padding=1)
-    vae.decoder.conv_out = nn.Conv2d(vae.decoder.conv_out.in_channels, 9, kernel_size=3, stride=1, padding=1)
-
-    modelData = 'checkpoints_vae_seg/vae_20241031_20.pth.tar'
-    checkpoint = torch.load(modelData)
-    if mulgpu == True:
-        state_dict = checkpoint['model_state_dict']
-        state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
+    if mulgpu:
+        if rgb:
+            input_dim = 3
+            modelData = 'checkpoints_vae_seg/vae_20241031_rgb20.pth.tar'
+            checkpoint = torch.load(modelData)
+            state_dict = checkpoint['model_state_dict']
+            state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
+        else:
+            input_dim = 9
+            modelData = 'checkpoints_vae_seg/vae_20241031_20.pth.tar'
+            checkpoint = torch.load(modelData)
+            state_dict = checkpoint['model_state_dict']
+            state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
     else:
+        modelData = 'checkpoints_vae_seg/vae_40.pth.tar'
+        checkpoint = torch.load(modelData)
         state_dict = checkpoint['model_state_dict']
+        
+    vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-mse")
+    vae.encoder.conv_in = nn.Conv2d(input_dim, vae.encoder.conv_in.out_channels, kernel_size=3, stride=1, padding=1)
+    vae.decoder.conv_out = nn.Conv2d(vae.decoder.conv_out.in_channels, input_dim, kernel_size=3, stride=1, padding=1)
     vae.load_state_dict(state_dict)
     vae.to(rank)
 
@@ -170,7 +181,7 @@ def train(rank):
             mot = mot.permute(0,2,1)
             
             # Map input images to latent space + normalize latents:
-            vid = vid.view(-1,64,64,9).permute(0,3,1,2)
+            vid = vid.view(-1,64,64,input_dim).permute(0,3,1,2)
             enc_vid = vae.encode(vid).latent_dist.sample()
             enc_vid = enc_vid.reshape(-1, args.sequence_length,4,8,8).permute(0,1,3,4,2)
             # Mask the inputs
@@ -218,7 +229,7 @@ def train(rank):
             loop.set_postfix(loss=loss.item(), noise_est_loss_vid=mean_loss_vid/(loop.n+1),noise_est_loss_mot=mean_loss_mot/(loop.n+1))
 
         if ((epoch+1) % 10 == 0):
-            torch.save({'model_state_dict': eps_est_model.state_dict()}, checkpoint_path + '/VDT_20241031_xacti_5fps_seq40_mgpu_d'+ str(depth) +'_h'+ str(hidden_size) +'_nh'+ str(nhead) +'_np'+ str(patch_size) +'_it1000_'  + str(epoch+1) + '.pth.tar')
+            torch.save({'model_state_dict': eps_est_model.state_dict()}, checkpoint_path + '/VDT_20241031rgb_xacti_5fps_seq40_mgpu_d'+ str(depth) +'_h'+ str(hidden_size) +'_nh'+ str(nhead) +'_np'+ str(patch_size) +'_it1000_'  + str(epoch+1) + '.pth.tar')
 
 if __name__ == "__main__":
     mp.spawn(train, nprocs=world_size, join=True)
