@@ -1,0 +1,9 @@
+__pycache__/
+dataset/*/
+wandb/
+checkpoints_mmVDT_cat_vae_seg/
+checkpoints_mmVDT_vae_seg/
+checkpoints_vae_seg/
+dit/
+
+mmVDT_robo_nav/
