@@ -1,6 +1,6 @@
 # mmVDT for Mobile-Robot Navigation
 
-Implementation and qualitative results for the mmVDT mobile-robot navigation work described in the [associated IEEE paper](https://ieeexplore.ieee.org/document/11170425/metrics#full-text-header).
+This is the implementation and qualitative results for the paper [“Action-Inclusive Multi-Future Prediction Using a Generative Model in Human-Related Scenes for Mobile Robots”](https://ieeexplore.ieee.org/document/11170425/metrics#full-text-header).
 
 mmVDT is a multimodal diffusion-transformer model that jointly models future visual observations and robot motion. The repository includes RGB and panoptic/semantic inputs, VAE training, single- and multi-GPU diffusion training, and notebooks for qualitative and quantitative evaluation.
 
