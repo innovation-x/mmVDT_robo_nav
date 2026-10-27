@@ -30,7 +30,7 @@ MaskDINO additionally requires Detectron2 and compilation of its CUDA extension;
 
 ## Results
 
-The following examples compare observed sequences from the dataset with multiple future trajectories sampled by the model. The semantic and RGB result assets are incorporated from the companion [mmVDT result gallery](https://github.com/innovation-x/mmVDT_for_mobile_robot).
+The following examples compare observed sequences from the dataset with multiple future trajectories sampled by the model. The semantic and RGB result assets are included directly in this repository.
 
 ### Panoptic / semantic inputs
 
