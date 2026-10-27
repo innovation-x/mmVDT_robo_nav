@@ -166,7 +166,7 @@ def visual_img(batch, motion, mot_viz = True):
         im = torch.tensor(batch_rgb[half_seq_len-1,:,:]).view(H,W,C)
         plt.imshow(im, 'gray') 
 
-def visual_img_each_channel(batch, channel = 1, mot_viz = True):
+def visual_img_each_channel(batch, mot_viz = True):
     '''
     This function can visualize the video clips and present the 
     motions on the frames. 
@@ -177,14 +177,17 @@ def visual_img_each_channel(batch, channel = 1, mot_viz = True):
     linear_gt = []
     angle_gt = []
 
-    fig = plt.figure(figsize=(20, 10))
-    batch_ch = batch[:,:,:,:,channel].squeeze().cpu().detach().numpy()
+    fig = plt.figure(figsize=(15, 10))
+    batch_ch = batch[:,:,:,:].squeeze().cpu().detach().numpy()
     T, H, W = batch_ch.shape
-
+    squence_length = T
     for t in range(squence_length):
         im = torch.tensor(batch_ch[t:t+1,:,:])
         im = im.view(H, W, 1)
-        ax = fig.add_subplot(6, int(squence_length/2), int(squence_length/2)+t+1, xticks=[], yticks=[])
+        if squence_length == 16:
+            ax = fig.add_subplot(6, int(squence_length/2), int(squence_length/2)+t+1, xticks=[], yticks=[])
+        else:
+            ax = fig.add_subplot(6, int(squence_length/4), int(squence_length/2)+t+1, xticks=[], yticks=[])
 
         ax.imshow(im,'gray')
 
@@ -251,7 +254,7 @@ def visual_vid_mmot(batch, motion, rgb=False, mot_viz = True, is_road=False, gri
             if (i == 0):
                 plt.plot(map_z.tolist(), map_x.tolist(), color='r', marker='o', linestyle='-',linewidth=1.5,markersize=3.5)
             else: 
-                plt.plot(map_z.tolist(), map_x.tolist(), color='g', marker='o', linestyle='-',linewidth=1,markersize=3)
+                plt.plot(map_z.tolist(), map_x.tolist(), color='orange', marker='o', linestyle='-',linewidth=2,markersize=5)
             im = torch.tensor(batch_rgb[frame_t-1,:,:]).view(H,W,C)
             plt.imshow(im, 'gray') 
         if is_road:
@@ -349,6 +352,72 @@ def gray2color(video):
 
     video_rgb = torch.cat([torch.tensor(video_r),torch.tensor(video_g), torch.tensor(video_b)], dim=1)/255
     return video_rgb
+
+def gray3c_2color(video):
+    ''' The input video size: [16, 9, 64, 64] '''
+    video = torch.argmax(video, 1).unsqueeze(1).cpu().numpy() *0.1*255
+    video = np.round(video*10)/10
+    # print(video[14,0,30])
+    video_r = copy.deepcopy(video)
+    video_g = copy.deepcopy(video)
+    video_b = copy.deepcopy(video)
+
+    ################ Person: Light cream######################
+    video_r[video_r== 25.5] = 212
+    video_g[video_g== 25.5] = 76
+    video_b[video_b== 25.5] = 60
+
+    ################ Floor: Deep orange-red ######################
+    video_r[video_r==51] = 128
+    video_g[video_g==51] = 128
+    video_b[video_b==51] = 128
+
+    ################ background: gray ######################
+    video_r[video_r==0] = 0
+    video_g[video_g==0] = 0
+    video_b[video_b==0] = 0
+
+    video_rgb = torch.cat([torch.tensor(video_r),torch.tensor(video_g), torch.tensor(video_b)], dim=1)/255
+    return video_rgb
+
+
+
+def channel2color(binary_video):
+    ''' The input video size: [t, 64, 64, 9] '''
+    video = binary_video.squeeze().permute(0,3,1,2).cpu().numpy() # [t, 9, 64, 64]
+    # print(video[14,0,30])
+    # 创建一个空的 RGB 图像
+    video_r = np.zeros((video.shape[0], video.shape[2], video.shape[3]), dtype=np.uint8)
+    video_g = np.zeros((video.shape[0], video.shape[2], video.shape[3]), dtype=np.uint8)
+    video_b = np.zeros((video.shape[0], video.shape[2], video.shape[3]), dtype=np.uint8)
+
+
+    # 定义每个 channel 的颜色
+    colors = [
+        (0, 0, 0),       # Undetected: Black
+        (220, 220, 220),  # Ceiling: Off-White
+        (0, 0, 0),  # Undetected: Black
+        (238, 213, 183),  # Wall: Light cream
+        (68, 117, 122),   # Window: Blue-Green
+        (69, 42, 61),     # Door: Purple
+        (212, 76, 60),    # Person: Deep orange-red
+        (128, 128, 128),  # Floor: gray
+        (0, 0, 0),       # Undetected: Black
+    ]
+
+    # 遍历每个 channel，将有值的部分替换为指定的颜色
+    for i in range(video.shape[1]):
+        mask = video[:, i, :, :] == 1
+        video_r[mask] = colors[i][0]
+        video_g[mask] = colors[i][1]
+        video_b[mask] = colors[i][2]
+
+    # 合成一个彩色的图
+    video_rgb = np.stack([video_r, video_g, video_b], axis=-1)  # [t, 64, 64, 3]
+    video_rgb = torch.tensor(video_rgb) / 255.0  # 归一化
+
+    return video_rgb
+
 
 if __name__ == '__main__':
     a = torch.randn([1, 40, 64, 64, 9])
